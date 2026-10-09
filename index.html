@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Fajr Sleep Planner</title>
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);--bg:#f4f6fb;--card:#fff;--bd:#dde3ef;--tx:#0d1424;--mu:#6b7690;--ac:#2f6bff}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#040814;--card:#0f1628;--bd:#222c44;--tx:#f2f5fc;--mu:#8a95b0;--ac:#6f9bff}}
+:root[data-theme="dark"]{--bg:#040814;--card:#0f1628;--bd:#222c44;--tx:#f2f5fc;--mu:#8a95b0;--ac:#6f9bff}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font-family:-apple-system,"Segoe UI",Roboto,sans-serif;padding:20px 18px 40px;max-width:520px;margin:0 auto}
+.lab{font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--mu)}
+h1{font-size:30px;margin:6px 0 2px;letter-spacing:-.02em}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:22px;padding:18px 20px;margin-top:14px}
+.big{font-size:44px;font-weight:700;letter-spacing:-.02em;margin-top:6px;font-variant-numeric:tabular-nums}
+.row{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px}
+.grid .card{margin:0;padding:14px 16px}
+.grid .t{font-size:22px;margin-top:6px;font-variant-numeric:tabular-nums}
+.next{border-color:var(--ac)}
+select,input{background:var(--bg);color:var(--tx);border:1px solid var(--bd);border-radius:12px;padding:10px;font-size:16px;width:100%}
+.ctl{display:grid;grid-template-columns:minmax(0,1fr);gap:14px;margin-top:14px}
+.ctl>div{min-width:0}
+.ctl input,.ctl select{height:48px;min-width:0;display:block}
+input[type=time]{-webkit-appearance:none;appearance:none;text-align:left}
+.stp{display:flex;gap:8px;align-items:center}
+.stp input{flex:1;text-align:center}
+.st{width:56px;height:48px;flex:none;margin-top:0;padding:0;font-size:22px}
+button{background:var(--ac);color:#fff;border:0;border-radius:12px;padding:10px 14px;font-size:15px;margin-top:10px;width:100%}
+.mu{color:var(--mu);font-size:13px}
+.good{color:#2fbf71}.warn{color:#f0a030}.bad{color:#e5534b}
+</style></head><body>
+<div class="lab" id="loc">Riyadh · Umm al-Qura</div>
+<h1>Fajr Sleep Planner</h1>
+<div class="mu" id="date"></div>
+
+<div class="card">
+  <div class="lab">Time until Fajr</div>
+  <div class="big" id="cd">--</div>
+  <div class="mu" id="fajrAt"></div>
+</div>
+
+<div class="card">
+  <div class="row"><div class="lab">Wake-up</div><div class="mu" id="wakeOff"></div></div>
+  <div class="big" id="wake">--</div>
+  <div class="row" style="margin-top:12px"><div class="lab">Sleep if you sleep at <span id="bedLbl">now</span></div></div>
+  <div class="big" id="sleep" style="font-size:34px">--</div>
+  <div class="mu" id="verdict"></div>
+  <div class="ctl">
+    <div><div class="lab" style="margin-bottom:6px">Bedtime</div><input type="time" id="bed"></div>
+    <div><div class="lab" style="margin-bottom:6px">Wake after Fajr (minutes)</div>
+      <div class="stp"><button class="st" id="dn">−</button><input type="number" id="off" min="0" max="180" value="10" ><button class="st" id="up">+</button></div></div>
+  </div>
+  <button id="now">Set bedtime to next quarter hour</button>
+</div>
+
+<div class="grid" id="grid"></div>
+
+<div class="card">
+  <div class="lab">Location</div>
+  <div class="ctl">
+    <select id="city"></select>
+  </div>
+  <button id="gps">Re-detect my location</button>
+  <div class="mu" style="margin-top:10px"><span id="src"></span></div>
+</div>
+
+<script>
+var R=Math.PI/180,sin=function(d){return Math.sin(d*R)},cos=function(d){return Math.cos(d*R)};
+var fix=function(a,n){a=a-n*Math.floor(a/n);return a<0?a+n:a};
+var CITIES={"Riyadh":[24.7136,46.6753,3],"Jeddah":[21.4858,39.1925,3],"Makkah":[21.3891,39.8579,3],"Madinah":[24.5247,39.5692,3],"Dammam":[26.4207,50.0888,3],"Abha":[18.2164,42.5053,3],"Tabuk":[28.3838,36.555,3]};
+var S={name:"Riyadh",lat:24.7136,lng:46.6753,tz:3};
+function jul(y,m,d){if(m<=2){y--;m+=12}var A=Math.floor(y/100),B=2-A+Math.floor(A/4);return Math.floor(365.25*(y+4716))+Math.floor(30.6001*(m+1))+d+B-1524.5}
+function sun(jd){var T=(jd-2451545)/36525,L0=fix(280.46646+T*(36000.76983+T*3.032e-4),360),M=fix(357.52911+T*(35999.05029-1.537e-4*T),360),
+ e=.016708634-T*(4.2037e-5+1.267e-7*T),C=sin(M)*(1.914602-T*(.004817+1.4e-5*T))+sin(2*M)*(.019993-1.01e-4*T)+sin(3*M)*2.89e-4,
+ om=125.04-1934.136*T,lam=L0+C-.00569-.00478*sin(om),
+ eps=23+(26+(21.448-T*(46.815+T*(5.9e-4-T*1.813e-3)))/60)/60+.00256*cos(om),
+ y=Math.pow(Math.tan(eps*R/2),2),
+ eq=4*(y*sin(2*L0)-2*e*sin(M)+4*e*y*sin(M)*cos(2*L0)-.5*y*y*sin(4*L0)-1.25*e*e*sin(2*M))/R;
+ return{dec:Math.asin(sin(eps)*sin(lam))/R,eqt:eq/60}}
+var APIC={},TRIED={},LIVE=false;
+function ckey(y,m,d){return y+"-"+m+"-"+d+"|"+S.lat.toFixed(2)+","+S.lng.toFixed(2)}
+function prefetch(){
+ [0,864e5].forEach(function(off){
+  var p=dayParts(Date.now()+off),k=ckey(p[0],p[1],p[2]);if(APIC[k]||TRIED[k])return;TRIED[k]=1;
+  var tzn=S.name==="My location"||/^Near|^My/.test(S.name)?Intl.DateTimeFormat().resolvedOptions().timeZone:"Asia/Riyadh";
+  var u="https://api.aladhan.com/v1/timings/"+("0"+p[2]).slice(-2)+"-"+("0"+p[1]).slice(-2)+"-"+p[0]+"?latitude="+S.lat+"&longitude="+S.lng+"&method=4&timezonestring="+encodeURIComponent(tzn);
+  fetch(u).then(function(r){return r.json()}).then(function(j){
+   var t=j.data.timings,o={};
+   [["imsak","Imsak"],["fajr","Fajr"],["sunrise","Sunrise"],["dhuhr","Dhuhr"],["asr","Asr"],["maghrib","Maghrib"],["isha","Isha"],["midnight","Midnight"]].forEach(function(n){
+    var hm=t[n[1]].slice(0,5).split(":");o[n[0]]=Date.UTC(p[0],p[1]-1,p[2],+hm[0],+hm[1])-S.tz*36e5});
+   if(o.imsak>o.fajr)o.imsak=o.fajr-6e5;
+   if(o.midnight<o.maghrib)o.midnight+=864e5;
+   APIC[k]=o;render()}).catch(function(){})})}
+function calc(y,m,d,ramadan){
+ var ck=ckey(y,m,d);if(APIC[ck]){LIVE=true;return APIC[ck]}
+ var jd=jul(y,m,d)-S.lng/360,lat=S.lat;
+ function at(a,h,ccw){var s=sun(jd+h/24),nn=fix(12-s.eqt,24);
+  var v=Math.acos((-sin(a)-sin(s.dec)*sin(lat))/(cos(s.dec)*cos(lat)))/R/15;return nn+(ccw?-v:v)}
+ var s0=sun(jd+.5),noon=fix(12-s0.eqt,24);
+ var asrA=-Math.atan(1/(1+Math.tan(Math.abs(lat-s0.dec)*R)))/R;
+ var h={fajr:at(18.5,5,1),sunrise:at(.833,6,1),dhuhr:noon,asr:at(asrA,15,0),maghrib:at(.833,18,0)};
+ h.isha=h.maghrib+(ramadan?2:1.5);
+ h.midnight=h.maghrib+(h.sunrise+24-h.maghrib)/2;h.imsak=h.fajr-1/6;
+ var o={};for(var k in h){o[k]=Math.round((Date.UTC(y,m-1,d)+(h[k]-S.lng/15)*36e5)/6e4)*6e4}
+ return o}
+function dayParts(ts){var x=new Date(ts+S.tz*36e5);return[x.getUTCFullYear(),x.getUTCMonth()+1,x.getUTCDate()]}
+function isRam(ts){try{var p=new Intl.DateTimeFormat("en-u-ca-islamic-umalqura",{month:"numeric",timeZone:"UTC"}).formatToParts(new Date(ts)).find(function(x){return x.type==="month"});return p&&+p.value===9}catch(e){return false}}
+function fmt(ts){var x=new Date(ts+S.tz*36e5),h=x.getUTCHours(),m=x.getUTCMinutes();return(h%12||12)+":"+(m<10?"0":"")+m+(h<12?" AM":" PM")}
+function dur(ms){if(ms<0)ms=0;var m=Math.round(ms/6e4);return Math.floor(m/60)+"h "+String(m%60).padStart(2,"0")+"m"}
+function $(i){return document.getElementById(i)}
+var bedMode="now";
+try{var sv=localStorage.getItem("fajrOff");if(sv!==null)$("off").value=sv}catch(e){}
+for(var c in CITIES){var o=document.createElement("option");o.textContent=c;$("city").appendChild(o)}
+$("city").onchange=function(){var v=CITIES[this.value];S={name:this.value,lat:v[0],lng:v[1],tz:v[2]};$("loc").textContent=S.name+" · Umm al-Qura";render()};
+function locate(manual){
+ if(!navigator.geolocation){if(manual)alert("Location not available");return}
+ $("loc").textContent="Detecting location…";
+ navigator.geolocation.getCurrentPosition(function(p){
+  S={name:"My location",lat:p.coords.latitude,lng:p.coords.longitude,tz:-new Date().getTimezoneOffset()/60};
+  var best=null,bd=1e9;for(var c in CITIES){var d=Math.hypot(CITIES[c][0]-S.lat,(CITIES[c][1]-S.lng)*cos(S.lat));if(d<bd){bd=d;best=c}}
+  S.name=bd<1?"Near "+best:"My location ("+S.lat.toFixed(2)+", "+S.lng.toFixed(2)+")";
+  $("loc").textContent=S.name+" · Umm al-Qura";
+  try{localStorage.setItem("fajrLoc",JSON.stringify(S))}catch(e){}
+  render()},function(){
+  $("loc").textContent=S.name+" · Umm al-Qura (location unavailable)";if(manual)alert("Location permission denied")},{timeout:10000,maximumAge:3600000})}
+$("gps").onclick=function(){locate(true)};
+try{var sl=JSON.parse(localStorage.getItem("fajrLoc"));if(sl&&sl.lat){S=sl;$("loc").textContent=S.name+" · Umm al-Qura"}}catch(e){}
+locate(false);
+$("bed").oninput=function(){bedMode="custom";render()};
+$("off").oninput=function(){try{localStorage.setItem("fajrOff",this.value)}catch(e){}render()};
+function step(d){var v=Math.min(180,Math.max(0,(+$("off").value||0)+d));$("off").value=v;$("off").oninput()}
+$("dn").onclick=function(){step(-5)};$("up").onclick=function(){step(5)};
+function nearestHalf(){var x=new Date(Math.ceil(Date.now()/9e5)*9e5+S.tz*36e5),h=x.getUTCHours(),m=x.getUTCMinutes();return(h<10?"0":"")+h+":"+(m<10?"0":"")+m}
+function setBed(){$("bed").value=nearestHalf();bedMode="custom";render()}
+$("now").onclick=setBed;
+var NAMES=[["imsak","Imsak"],["fajr","Fajr"],["sunrise","Sunrise"],["dhuhr","Dhuhr"],["asr","Asr"],["maghrib","Maghrib"],["isha","Isha"],["midnight","Midnight"]];
+function render(){
+ prefetch();LIVE=false;
+ var now=Date.now(),p=dayParts(now),T=calc(p[0],p[1],p[2],isRam(now));
+ var tgt=T.fajr,tm=T;
+ if(now>=T.fajr){var q=dayParts(now+864e5);tm=calc(q[0],q[1],q[2],isRam(now+864e5));tgt=tm.fajr}
+ var off=Math.max(0,+$("off").value||0),wake=tgt+off*6e4;
+ $("src").textContent=LIVE?"Source: live Umm al-Qura times from Aladhan.":"Source: calculated on this device (Umm al-Qura method: Fajr 18.5°, Isha 90 min after Maghrib). Live data loads automatically when the page can reach the internet API.";
+ $("date").textContent=new Date(now+S.tz*36e5).toUTCString().slice(0,16);
+ $("cd").textContent=dur(tgt-now);
+ $("fajrAt").textContent="Fajr adhan at "+fmt(tgt)+(tgt===T.fajr?" today":" tomorrow");
+ $("wake").textContent=fmt(wake);
+ $("wakeOff").textContent="Fajr + "+off+" min";
+ var bed=now;
+ if($("bed").value&&bedMode==="custom"){var hm=$("bed").value.split(":"),b=Date.UTC(p[0],p[1]-1,p[2],+hm[0],+hm[1])-S.tz*36e5;
+  while(b>wake)b-=864e5;while(b+864e5<=wake&&b<now-18e5)b+=864e5;bed=b}
+ $("bedLbl").textContent=bedMode==="now"?"now":fmt(bed);
+ var sl=wake-bed;$("sleep").textContent=dur(sl);
+ var h=sl/36e5,v=$("verdict");
+ v.className="mu "+(h>=7?"good":h>=5.5?"warn":"bad");
+ v.textContent=h>=7?"Good — you can get a full night.":h>=5.5?"Short-ish. Try sleeping earlier.":"Very little sleep — consider sleeping sooner or napping later.";
+ var nextK=null,all=[];
+ NAMES.forEach(function(n){all.push([n[0],n[1],T[n[0]]])});
+ for(var i=0;i<all.length;i++){if(all[i][2]>now){nextK=all[i][0];break}}
+ if(!nextK)nextK="fajr";
+ $("grid").innerHTML=all.map(function(a){return'<div class="card'+(a[0]===nextK?' next':'')+'"><div class="lab">'+a[1]+'</div><div class="t">'+fmt(nextK==="fajr"&&a[0]==="fajr"&&now>=T.fajr?tm.fajr:a[2])+'</div></div>'}).join("")}
+$("bed").value=nearestHalf();bedMode="custom";render();setInterval(render,1000);
+</script></body></html>
