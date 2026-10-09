@@ -125,8 +125,18 @@ function locate(manual){
   render()},function(){
   $("loc").textContent=S.name+" · Umm al-Qura (location unavailable)";if(manual)alert("Location permission denied")},{timeout:10000,maximumAge:3600000})}
 $("gps").onclick=function(){locate(true)};
-try{var sl=JSON.parse(localStorage.getItem("fajrLoc"));if(sl&&sl.lat){S=sl;$("loc").textContent=S.name+" · Umm al-Qura"}}catch(e){}
-locate(false);
+var savedLocation=false,locationAttempted=false;
+try{
+ var sl=JSON.parse(localStorage.getItem("fajrLoc"));
+ if(sl&&Number.isFinite(sl.lat)&&Number.isFinite(sl.lng)&&Number.isFinite(sl.tz)){
+  S=sl;savedLocation=true;$("loc").textContent=S.name+" · Umm al-Qura";
+ }
+ locationAttempted=localStorage.getItem("fajrLocationAttempted")==="1";
+}catch(e){}
+if(!savedLocation&&!locationAttempted){
+ try{localStorage.setItem("fajrLocationAttempted","1")}catch(e){}
+ locate(false);
+}
 $("bed").oninput=function(){bedMode="custom";render()};
 $("off").oninput=function(){try{localStorage.setItem("fajrOff",this.value)}catch(e){}render()};
 function step(d){var v=Math.min(180,Math.max(0,(+$("off").value||0)+d));$("off").value=v;$("off").oninput()}
